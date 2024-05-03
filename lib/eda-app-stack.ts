@@ -38,6 +38,12 @@ export class EDAAppStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(10),
     });
 
+     // 添加第二个队列用于拒绝邮件
+     const rejectionMailerQ = new sqs.Queue(this, "rejection-mailer-queue", {
+      receiveMessageWaitTime: cdk.Duration.seconds(10),
+    });
+
+
     // Lambda functions
 
     const processImageFn = new lambdanode.NodejsFunction(
@@ -57,6 +63,15 @@ export class EDAAppStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(3),
       entry: `${__dirname}/../lambdas/mailer.ts`,
     });
+
+    
+    // 添加拒绝邮件处理的Lambda函数
+    const rejectionMailerFn = new lambdanode.NodejsFunction(this, "RejectionMailerFunction", {
+      runtime: lambda.Runtime.NODEJS_16_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(3),
+      entry: `${__dirname}/../lambdas/rejectionMailer.ts`,  // 确保正确的路径和文件名
+    });
     
     // S3 --> SQS
     //  对象创建时发送提示
@@ -69,6 +84,9 @@ export class EDAAppStack extends cdk.Stack {
     );
 
     newImageTopic.addSubscription(new subs.SqsSubscription(mailerQ));
+
+    // reject队列
+    newImageTopic.addSubscription(new subs.SqsSubscription(rejectionMailerQ));
 
     // SQS --> Lambda
     //  触发lambda语句
@@ -99,6 +117,25 @@ export class EDAAppStack extends cdk.Stack {
       })
     );
     
+
+    // rejectemail
+    const rejectionMailerEventSource = new events.SqsEventSource(rejectionMailerQ, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(10),
+    });
+     rejectionMailerFn.addEventSource(rejectionMailerEventSource);
+
+     rejectionMailerFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+          "ses:SendTemplatedEmail",
+        ],
+        resources: ["*"],
+      })
+    );
 
     // Permissions
     // 权限
