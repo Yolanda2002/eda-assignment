@@ -8,6 +8,7 @@ import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -42,6 +43,15 @@ export class EDAAppStack extends cdk.Stack {
      const rejectionMailerQ = new sqs.Queue(this, "rejection-mailer-queue", {
       receiveMessageWaitTime: cdk.Duration.seconds(10),
     });
+    
+    // 创建 DynamoDB 表
+    const imageTable = new dynamodb.Table(this, 'ImageTable', {
+      partitionKey: { name: 'imageName', type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY, 
+    });
+
+   
+  
 
 
     // Lambda functions
@@ -140,6 +150,8 @@ export class EDAAppStack extends cdk.Stack {
     // Permissions
     // 权限
     imagesBucket.grantRead(processImageFn);
+     // 授予 Process Image Lambda 函数访问 DynamoDB 表的权限
+     imageTable.grantReadWriteData(processImageFn);
 
     // Output
     //输出桶名称

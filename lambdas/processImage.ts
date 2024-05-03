@@ -7,35 +7,38 @@ import {
   S3Client,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
+import { DynamoDB } from 'aws-sdk';
+
+const dynamoDb = new DynamoDB.DocumentClient();
 
 const s3 = new S3Client();
 
 export const handler: SQSHandler = async (event) => {
-  console.log("Event ", JSON.stringify(event));
-  for (const record of event.Records) {
-    const recordBody = JSON.parse(record.body);  // Parse SQS message
-    const snsMessage = JSON.parse(recordBody.Message); // Parse SNS message
-
-    if (snsMessage.Records) {
-      console.log("Record body ", JSON.stringify(snsMessage));
-      for (const messageRecord of snsMessage.Records) {
-        const s3e = messageRecord.s3;
-        const srcBucket = s3e.bucket.name;
-        // Object key may have spaces or unicode non-ASCII characters.
-        const srcKey = decodeURIComponent(s3e.object.key.replace(/\+/g, " "));
-        let origimage = null;
-        try {
-          // Download the image from the S3 source bucket.
-          const params: GetObjectCommandInput = {
-            Bucket: srcBucket,
-            Key: srcKey,
+    for (const record of event.Records) {
+      const recordBody = JSON.parse(record.body);
+      const snsMessage = JSON.parse(recordBody.Message);
+  
+      if (snsMessage.Records) {
+        for (const messageRecord of snsMessage.Records) {
+          const s3e = messageRecord.s3;
+          const srcBucket = s3e.bucket.name;
+          const srcKey = decodeURIComponent(s3e.object.key.replace(/\+/g, " "));
+  
+          // 将信息写入 DynamoDB
+          const putParams = {
+            TableName: 'ImageTable', 
+            Item: {
+              imageName: srcKey
+            },
           };
-          origimage = await s3.send(new GetObjectCommand(params));
-          // Process the image ......
-        } catch (error) {
-          console.log(error);
+  
+          try {
+            await dynamoDb.put(putParams).promise();
+            console.log('DynamoDB write successful:', srcKey);
+          } catch (error) {
+            console.error('Error writing to DynamoDB:', error);
+          }
         }
       }
     }
-  }
-};
+  };
