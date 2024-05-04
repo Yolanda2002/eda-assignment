@@ -11,6 +11,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 import { Construct } from "constructs";
+import { RegionInfo } from "aws-cdk-lib/region-info";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
 export class EDAAppStack extends cdk.Stack {
@@ -48,6 +49,7 @@ export class EDAAppStack extends cdk.Stack {
     const imageTable = new dynamodb.Table(this, 'ImageTable', {
       partitionKey: { name: 'imageName', type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY, 
+      tableName:'ImageTable',
     });
 
     const deleteImageTopic = new sns.Topic(this, 'DeleteImageTopic', {
@@ -62,6 +64,7 @@ export class EDAAppStack extends cdk.Stack {
   
 
 
+
     // Lambda functions
 
     const processImageFn = new lambdanode.NodejsFunction(
@@ -72,6 +75,10 @@ export class EDAAppStack extends cdk.Stack {
         entry: `${__dirname}/../lambdas/processImage.ts`,
         timeout: cdk.Duration.seconds(15),
         memorySize: 128,
+        environment: {
+          TABLE_NAME: imageTable.tableName,
+          REGION:'eu-west-1',
+        }
       }
     );
 
@@ -96,9 +103,20 @@ export class EDAAppStack extends cdk.Stack {
       entry: `${__dirname}/../lambdas/processDelete.ts`, 
       handler: 'handler',
       environment: {
-        TABLE_NAME: 'ImageTable',
+        TABLE_NAME: imageTable.tableName,
+        REGION:'eu-west-1',
       }
     });
+
+    const updateDescriptionFn = new lambdanode.NodejsFunction(this, "UpdateDescriptionFunction", {
+      runtime: lambda.Runtime.NODEJS_16_X,
+      entry: `${__dirname}/../lambdas/updateDescription.ts`,
+      handler: 'handler',
+      environment: {
+          TABLE_NAME: imageTable.tableName,
+          REGION:'eu-west-1',
+      }
+  });
 
     
     // S3 --> SQS
@@ -148,6 +166,21 @@ export class EDAAppStack extends cdk.Stack {
       })
     );
     
+    const updateDescriptionTopic = new sns.Topic(this, 'UpdateDescriptionTopic', {
+      displayName: 'Update Description Topic'
+  });
+  
+  updateDescriptionTopic.addSubscription(new subs.LambdaSubscription(updateDescriptionFn));
+  
+
+  // 为 Lambda 函数授予权限
+updateDescriptionFn.addToRolePolicy(new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  actions: [
+      "dynamodb:UpdateItem", // 允许更新 DynamoDB 表中的条目
+  ],
+  resources: [imageTable.tableArn] // 使用表的 ARN
+}));
 
     // rejectemail
     const rejectionMailerEventSource = new events.SqsEventSource(rejectionMailerQ, {
@@ -177,7 +210,7 @@ processDeleteFn.addToRolePolicy(new iam.PolicyStatement({
         "dynamodb:GetItem", // 如果需要在删除前检查条目
         "dynamodb:Scan", // 如果需要查找条目
     ],
-    resources: ["arn:aws:dynamodb:region:account-id:table/YourDynamoDBTableName"]
+    resources: ["arn:aws:dynamodb:region:account-id:table/ImageTable"]
 }));
 
 
@@ -192,5 +225,9 @@ processDeleteFn.addToRolePolicy(new iam.PolicyStatement({
     new cdk.CfnOutput(this, "bucketName", {
       value: imagesBucket.bucketName,
     });
+
+    new cdk.CfnOutput(this, 'UpdateDescriptionTopicArn', {
+      value: updateDescriptionTopic.topicArn,
+  });
   }
 }
