@@ -66,4 +66,10 @@
 
 - Delete Mailer - Fully implemented.
 
-  
+  deleteMailer.ts
+
+  Users can get an email after deleting things from the database.
+
+  **Since  I recorded the video first and uploaded this feature later, I added a image to show the results. Hope you could see it!**
+
+![](https://github.com/Yolanda2002/eda-assignment/blob/master/images/mail.png)

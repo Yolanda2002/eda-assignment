@@ -140,7 +140,7 @@ export class EDAAppStack extends cdk.Stack {
     entry: `${__dirname}/../lambdas/deleteMailer.ts`,
     environment: {
         TABLE_NAME: imageTable.tableName,
-        REGION: cdk.Aws.REGION
+        REGION:'eu-west-1',
     }
 });
     
