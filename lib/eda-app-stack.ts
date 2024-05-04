@@ -12,6 +12,9 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 import { Construct } from "constructs";
 import { RegionInfo } from "aws-cdk-lib/region-info";
+import { StreamViewType } from "aws-cdk-lib/aws-dynamodb";
+import {  DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import { StartingPosition } from "aws-cdk-lib/aws-lambda";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
 export class EDAAppStack extends cdk.Stack {
@@ -56,6 +59,10 @@ export class EDAAppStack extends cdk.Stack {
       displayName: 'Delete Image Topic'
     });
 
+    const totalImageTopic = new sns.Topic(this, "TotalImageTopic", {
+      displayName: "Total Image Topic",
+  });
+
     // 配置 S3 删除事件通知
     imagesBucket.addEventNotification(
       s3.EventType.OBJECT_REMOVED_DELETE,
@@ -63,6 +70,16 @@ export class EDAAppStack extends cdk.Stack {
     );
   
 
+    imagesBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED_PUT,
+      new s3n.SnsDestination(totalImageTopic)
+  );
+  imagesBucket.addEventNotification(
+      s3.EventType.OBJECT_REMOVED_DELETE,
+      new s3n.SnsDestination(totalImageTopic)
+  );
+
+  
 
 
     // Lambda functions
@@ -118,6 +135,14 @@ export class EDAAppStack extends cdk.Stack {
       }
   });
 
+  const deleteMailerFn = new lambdanode.NodejsFunction(this, "DeleteMailerFunction", {
+    runtime: lambda.Runtime.NODEJS_16_X,
+    entry: `${__dirname}/../lambdas/deleteMailer.ts`,
+    environment: {
+        TABLE_NAME: imageTable.tableName,
+        REGION: cdk.Aws.REGION
+    }
+});
     
     // S3 --> SQS
     //  对象创建时发送提示
@@ -136,6 +161,9 @@ export class EDAAppStack extends cdk.Stack {
 
     deleteImageTopic.addSubscription(new subs.LambdaSubscription(processDeleteFn));
 
+    new cdk.CfnOutput(this, "TotalImageTopicArn", {
+      value: totalImageTopic.topicArn
+  });
 
     // SQS --> Lambda
     //  触发lambda语句

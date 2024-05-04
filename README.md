@@ -41,6 +41,12 @@
   updateDescription.ts
 
   Users can add image descriptions using the AWS CLI and upload them to DynamoDB.
+  
+- Delete images - Fully implemented.(I added)
+
+  processDelete.ts
+
+  Users can delete objects (images) from storage buckets using the AWS CLI.
 
 
 
@@ -57,5 +63,7 @@
   processDelete.ts
 
   Users can delete objects (images) from storage buckets using the AWS CLI.
+
+- Delete Mailer - Fully implemented.
 
   
