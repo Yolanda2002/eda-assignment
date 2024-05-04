@@ -50,7 +50,15 @@ export class EDAAppStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY, 
     });
 
-   
+    const deleteImageTopic = new sns.Topic(this, 'DeleteImageTopic', {
+      displayName: 'Delete Image Topic'
+    });
+
+    // 配置 S3 删除事件通知
+    imagesBucket.addEventNotification(
+      s3.EventType.OBJECT_REMOVED_DELETE,
+      new s3n.SnsDestination(deleteImageTopic)
+    );
   
 
 
@@ -80,8 +88,18 @@ export class EDAAppStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_16_X,
       memorySize: 1024,
       timeout: cdk.Duration.seconds(3),
-      entry: `${__dirname}/../lambdas/rejectionMailer.ts`,  // 确保正确的路径和文件名
+      entry: `${__dirname}/../lambdas/rejectionMailer.ts`,  
     });
+
+    const processDeleteFn = new lambdanode.NodejsFunction(this, 'ProcessDeleteFunction', {
+      runtime: lambda.Runtime.NODEJS_16_X, 
+      entry: `${__dirname}/../lambdas/processDelete.ts`, 
+      handler: 'handler',
+      environment: {
+        TABLE_NAME: 'ImageTable',
+      }
+    });
+
     
     // S3 --> SQS
     //  对象创建时发送提示
@@ -97,6 +115,9 @@ export class EDAAppStack extends cdk.Stack {
 
     // reject队列
     newImageTopic.addSubscription(new subs.SqsSubscription(rejectionMailerQ));
+
+    deleteImageTopic.addSubscription(new subs.LambdaSubscription(processDeleteFn));
+
 
     // SQS --> Lambda
     //  触发lambda语句
@@ -146,6 +167,19 @@ export class EDAAppStack extends cdk.Stack {
         resources: ["*"],
       })
     );
+
+    
+
+processDeleteFn.addToRolePolicy(new iam.PolicyStatement({
+    effect: iam.Effect.ALLOW,
+    actions: [
+        "dynamodb:DeleteItem", // 允许删除 DynamoDB 表中的条目
+        "dynamodb:GetItem", // 如果需要在删除前检查条目
+        "dynamodb:Scan", // 如果需要查找条目
+    ],
+    resources: ["arn:aws:dynamodb:region:account-id:table/YourDynamoDBTableName"]
+}));
+
 
     // Permissions
     // 权限
