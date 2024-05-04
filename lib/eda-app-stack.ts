@@ -219,6 +219,7 @@ processDeleteFn.addToRolePolicy(new iam.PolicyStatement({
     imagesBucket.grantRead(processImageFn);
      // 授予 Process Image Lambda 函数访问 DynamoDB 表的权限
      imageTable.grantReadWriteData(processImageFn);
+     imageTable.grantReadWriteData(processDeleteFn);
 
     // Output
     //输出桶名称
